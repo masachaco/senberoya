@@ -2,7 +2,7 @@
 
 サイゼリヤで食べたい料理を選ぶと、残りの予算でいちばん多く飲めるワインの頼み方（グラス・デカンタ小/大・マグナム）を計算する非公式ツールです。
 
-公開ページ: https://masachaco.github.io/sakekuzuya/
+公開ページ: https://masachaco.github.io/senberoya/
 
 ## 公開方法
 
