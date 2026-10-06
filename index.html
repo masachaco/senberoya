@@ -210,6 +210,9 @@ button { cursor: pointer; }
 .copied { font-size: 13px; color: var(--ok); }
 #copyBox { width: 100%; min-height: 120px; font-family: var(--font-mono); font-size: 12px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: 8px; }
 
+.notice { border: 2px solid var(--warn); background: var(--surface); padding: 10px 14px; display: grid; gap: 4px; font-size: 13px; max-width: 60em; }
+.notice h2 { margin: 0; font-size: 14px; color: var(--warn); letter-spacing: .04em; }
+.notice ul { margin: 0; padding-left: 1.2em; display: grid; gap: 2px; }
 .note { color: var(--muted); font-size: 12px; max-width: 60em; display: grid; gap: 4px; }
 .note p { margin: 0; }
 
@@ -293,6 +296,15 @@ button { cursor: pointer; }
     <div class="flag" aria-hidden="true"><i></i><i></i><i></i></div>
     <p>サイゼリヤで食べたい料理を選ぶと、残りの予算でいちばん多く飲めるワインの頼み方を出します。各料理の下の数字は、それを頼むと減るワインの量です。</p>
   </header>
+
+  <aside class="notice" aria-labelledby="noticeTitle">
+    <h2 id="noticeTitle">大事なおことわり</h2>
+    <ul>
+      <li>このツールは、たくさん飲むことを勧めるものではありません。飲む量は体調に合わせて決め、飲み過ぎには気をつけてください。</li>
+      <li>このツールの計算結果をもとにした注文や飲酒で起きたことについて、作者は責任を負いません。</li>
+      <li>価格と注文番号は作成時点のデータです。メニュー改定などで実際の店とずれていることがあるので、注文する前に必ず店のメニューで値段を確かめてください。</li>
+    </ul>
+  </aside>
 
   <section class="setup" aria-label="設定">
     <div class="setup-item">
