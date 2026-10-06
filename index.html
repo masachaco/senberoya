@@ -1,0 +1,930 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>酒クズ屋</title>
+<meta name="description" content="サイゼリヤで食べたい料理を選ぶと、残りの予算でいちばん多く飲めるワインの頼み方を出す非公式ツール">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+</head><body>
+<style>
+/* Layout: 上に予算の設定、その下にカテゴリのタブと横スワイプで切り替わるお品書き。
+   注文メモは下のバーから開くダイアログ。合計は画面下の固定バーにだけ出す。
+   色はイタリア国旗の緑・白・赤。緑は操作、赤はワインの量、白は地。 */
+:root {
+  --bg: #F6F7F2;
+  --surface: #FFFFFF;
+  --ink: #17251D;
+  --muted: #5B6B62;
+  --line: #D3DBD4;
+  --green: #0A7B43;
+  --green-soft: #E1F0E6;
+  --on-green: #FFFFFF;
+  --red: #C4202B;
+  --pour-red: #B01E2D;
+  --pour-white: #D9BC4A;
+  --glass: #FFFFFF;
+  --ok: #0A7B43;
+  --warn: #9A5B00;
+  --bar-bg: #14402A;
+  --bar-fg: #FFFFFF;
+  --bar-muted: #BFD6C8;
+  --bar-warn: #FFC27A;
+  --flag-g: #008C45;
+  --flag-w: #F4F5F0;
+  --flag-r: #CD212A;
+  --bar-h: 84px;
+  --scrim: rgb(12 24 18 / .55);
+  --font-display: "Dela Gothic One", "Hiragino Kaku Gothic StdN", "Yu Gothic", "Meiryo", sans-serif;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+  --font-mono: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101613; --surface: #19221D; --ink: #EEF3EE; --muted: #9DAEA3; --line: #2D3B33;
+    --green: #4CC38A; --green-soft: #17362A; --on-green: #06200F;
+    --red: #F4747B; --pour-red: #C93A4B; --pour-white: #E6CB63; --glass: #232E28;
+    --ok: #4CC38A; --warn: #F0A15C;
+    --bar-bg: #1E4E36; --bar-fg: #FFFFFF; --bar-muted: #BFD6C8; --bar-warn: #FFC27A;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101613; --surface: #19221D; --ink: #EEF3EE; --muted: #9DAEA3; --line: #2D3B33;
+  --green: #4CC38A; --green-soft: #17362A; --on-green: #06200F;
+  --red: #F4747B; --pour-red: #C93A4B; --pour-white: #E6CB63; --glass: #232E28;
+  --ok: #4CC38A; --warn: #F0A15C;
+  --bar-bg: #1E4E36; --bar-fg: #FFFFFF; --bar-muted: #BFD6C8; --bar-warn: #FFC27A;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.6;
+}
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+.code { font-family: var(--font-mono); font-size: 12px; letter-spacing: .02em; }
+
+.wrap {
+  max-width: 1120px; margin-inline: auto;
+  padding-inline: clamp(16px, 4vw, 32px); padding-block: 24px calc(var(--bar-h) + 32px);
+  display: grid; gap: 20px;
+}
+.wrap > * { min-width: 0; }
+.top { display: grid; gap: 8px; }
+.top h1 {
+  font-family: var(--font-display); font-weight: 400;
+  font-size: clamp(2rem, 7vw, 3rem); line-height: 1.05; margin: 0;
+}
+.flag { display: flex; width: 96px; height: 8px; border: 1px solid var(--line); }
+.flag i { flex: 1; }
+.flag i:nth-child(1) { background: var(--flag-g); }
+.flag i:nth-child(2) { background: var(--flag-w); }
+.flag i:nth-child(3) { background: var(--flag-r); }
+.top p { margin: 0; max-width: 40em; color: var(--muted); font-size: 14px; }
+
+/* 設定 */
+.setup { display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: center; }
+.setup-item { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.field-label { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+.yen-input { display: inline-flex; align-items: baseline; gap: 4px; border-bottom: 2px solid var(--ink); padding-bottom: 2px; }
+.yen-input input {
+  width: 4.2em; border: 0; background: transparent; padding: 0;
+  font-size: 22px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield; appearance: textfield;
+}
+.yen-input input::-webkit-outer-spin-button, .yen-input input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.yen-input input:focus-visible { outline: none; }
+.yen-input:focus-within { border-bottom-color: var(--green); }
+.chip {
+  border: 1px solid var(--line); background: transparent; border-radius: 999px;
+  padding: 4px 12px; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; flex: none;
+}
+.chip:hover { border-color: var(--green); color: var(--green); }
+.chip[aria-pressed="true"], .chip[aria-selected="true"] { background: var(--green); border-color: var(--green); color: var(--on-green); }
+.seg { display: inline-flex; gap: 6px; }
+.check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+.check input { accent-color: var(--green); width: 16px; height: 16px; margin: 0; }
+
+/* タブとページ送り */
+.menu { display: grid; min-width: 0; }
+.cats {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 2;
+  background: var(--bg); padding-block: 8px; border-bottom: 1px solid var(--line);
+  display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+}
+.cats::-webkit-scrollbar { display: none; }
+.cats .chip { display: inline-flex; gap: 6px; align-items: center; padding: 6px 14px; font-size: 14px; }
+.cats .chip .n {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--red); color: var(--surface); font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
+}
+.pager {
+  display: flex; align-items: flex-start; overflow-x: auto; overflow-y: hidden;
+  scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none;
+}
+.pager::-webkit-scrollbar { display: none; }
+.panel { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; padding-top: 8px; display: grid; gap: 8px; align-content: start; }
+.cat-note { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
+.rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); column-gap: 40px; }
+.row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center;
+  padding: 9px 8px; border-bottom: 1px solid var(--line);
+}
+.row.on { background: var(--green-soft); }
+.row.out .nm, .row.out .price { color: var(--muted); }
+.row .nm { font-weight: 500; overflow-wrap: anywhere; }
+.row .sub { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 12px; color: var(--muted); align-items: baseline; }
+.row .cost { color: var(--red); font-weight: 700; font-variant-numeric: tabular-nums; }
+.row .cost.free { color: var(--ok); }
+.row .cost.no { color: var(--muted); font-weight: 400; }
+.row .tag { border: 1px solid var(--line); padding: 0 6px; border-radius: 999px; }
+.row .price { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.step { display: grid; grid-template-columns: 34px 26px 34px; align-items: center; text-align: center; }
+.step button {
+  width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--ink);
+  background: var(--surface); font-size: 18px; line-height: 1; padding: 0;
+}
+.step button:hover:not(:disabled) { background: var(--green); border-color: var(--green); color: var(--on-green); }
+.step button:disabled { border-color: var(--line); color: var(--line); cursor: default; }
+.step .qty { font-weight: 700; font-variant-numeric: tabular-nums; }
+.link { border: 0; background: none; padding: 0; color: var(--muted); text-decoration: underline; font-size: 12px; }
+.link:hover { color: var(--green); }
+
+/* その他（自分で足す品） */
+.add { display: grid; gap: 8px; padding-top: 8px; }
+.add h2 { font-size: 15px; margin: 0; }
+.add form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+.add label { display: grid; gap: 2px; font-size: 12px; color: var(--muted); }
+.add input { border: 1px solid var(--line); background: var(--surface); padding: 7px 9px; color: var(--ink); font-size: 15px; }
+.add #addName { width: min(100%, 15em); }
+.add #addPrice { width: 6.5em; }
+.add .err { flex-basis: 100%; color: var(--warn); font-size: 13px; margin: 0; }
+.add .empty { font-size: 13px; color: var(--muted); margin: 0; }
+
+/* 注文メモ */
+.memo-dlg {
+  border: 0; padding: 0; background: transparent; color: var(--ink);
+  width: min(560px, calc(100% - 32px)); max-width: none; max-height: calc(100% - 32px); overflow: auto;
+}
+.memo-dlg::backdrop { background: var(--scrim); }
+.memo { background: var(--surface); border: 1px dashed var(--muted); padding: 16px 18px; display: grid; gap: 12px; min-width: 0; }
+.memo-head { display: flex; align-items: center; gap: 12px; }
+.memo-head span { margin-right: auto; }
+.memo-head .x { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--ink); background: transparent; font-size: 18px; line-height: 1; padding: 0; }
+.memo-head .x:hover { background: var(--ink); color: var(--bg); }
+.memo-body { display: grid; gap: 10px; }
+.memo h2 { font-family: var(--font-display); font-weight: 400; font-size: 18px; margin: 0; }
+.memo-head span { font-size: 12px; color: var(--muted); }
+.table-top {
+  display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: flex-end;
+  min-height: 84px; padding: 8px 12px 0; border-bottom: 3px solid var(--ink);
+  --pour: var(--pour-red);
+}
+.table-top[data-color="white"] { --pour: var(--pour-white); }
+.table-top svg { display: block; flex: none; }
+.table-top .more { font-size: 13px; color: var(--muted); padding-bottom: 6px; }
+.table-top .none { align-self: center; color: var(--muted); font-size: 13px; padding-bottom: 12px; }
+.v-glass { fill: var(--glass); stroke: var(--ink); stroke-width: 1.6; stroke-linejoin: round; }
+.v-liq { fill: var(--pour, var(--pour-red)); }
+.v-line { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-linecap: round; }
+.msg { font-size: 13px; padding: 8px 10px; border: 1px solid var(--line); }
+.msg.ok { color: var(--ok); border-color: currentColor; }
+.msg.warn { color: var(--warn); border-color: currentColor; }
+.memo ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.memo li { display: grid; grid-template-columns: 3.2em minmax(0, 1fr) auto auto; gap: 8px; align-items: baseline; font-size: 14px; }
+.memo li .q { color: var(--muted); }
+.memo .grp { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--muted); }
+.memo .empty { font-size: 13px; color: var(--muted); }
+.sums { border-top: 1px dashed var(--muted); padding-top: 10px; display: grid; gap: 4px; margin: 0; }
+.sums div { display: flex; justify-content: space-between; gap: 12px; }
+.sums dt { color: var(--muted); }
+.sums dd { margin: 0; font-weight: 700; }
+.sums .grand dt, .sums .grand dd { color: var(--ink); font-size: 16px; }
+.memo-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.btn { border: 1px solid var(--ink); background: transparent; padding: 7px 14px; font-weight: 700; font-size: 13px; }
+.btn:hover:not(:disabled) { background: var(--ink); color: var(--bg); }
+.btn:disabled { border-color: var(--line); color: var(--muted); cursor: default; }
+.btn.primary { background: var(--green); border-color: var(--green); color: var(--on-green); }
+.btn.primary:hover { filter: brightness(1.08); background: var(--green); color: var(--on-green); }
+.copied { font-size: 13px; color: var(--ok); }
+#copyBox { width: 100%; min-height: 120px; font-family: var(--font-mono); font-size: 12px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: 8px; }
+
+.note { color: var(--muted); font-size: 12px; max-width: 60em; display: grid; gap: 4px; }
+.note p { margin: 0; }
+
+/* スワイプのヒント */
+.hint {
+  position: fixed; left: 50%; transform: translateX(-50%); z-index: 6;
+  bottom: calc(var(--bar-h) + 14px);
+  width: max-content; max-width: calc(100% - 32px);
+  display: flex; gap: 10px; align-items: center;
+  background: var(--ink); color: var(--bg);
+  padding: 10px 10px 10px 16px; border-radius: 999px; font-size: 13px; font-weight: 700;
+}
+.hint .arrows { font-family: var(--font-mono); white-space: nowrap; }
+.hint button { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 1px solid currentColor; background: transparent; color: inherit; line-height: 1; padding: 0; }
+
+/* 画面下に固定する合計 */
+.bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+  background: var(--bar-bg); color: var(--bar-fg);
+  border-top: 5px solid var(--flag-w);
+  border-image: linear-gradient(90deg, var(--flag-g) 0 33.34%, var(--flag-w) 33.34% 66.67%, var(--flag-r) 66.67% 100%) 1;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.bar-in {
+  max-width: 1120px; margin-inline: auto;
+  padding-inline: clamp(16px, 4vw, 32px); padding-block: 10px;
+  display: flex; gap: 8px 28px; align-items: center;
+}
+.bar-wine { display: grid; min-width: 0; margin-right: auto; }
+.bar-ml { font-family: var(--font-display); font-size: 24px; line-height: 1.15; white-space: nowrap; }
+.bar-plan { font-size: 12px; color: var(--bar-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-sums { display: flex; gap: 6px 24px; margin: 0; }
+.bar-sums div { display: grid; }
+.bar-sums dt { font-size: 11px; letter-spacing: .08em; color: var(--bar-muted); }
+.bar-sums dd { margin: 0; font-weight: 700; font-size: 16px; white-space: nowrap; }
+.bar-sums .grand dd { font-size: 20px; line-height: 1.2; }
+.bar-sums .short dt, .bar-sums .short dd { color: var(--bar-warn); }
+.bar button { flex: none; border: 1px solid var(--bar-fg); background: transparent; color: var(--bar-fg); padding: 7px 12px; font-size: 13px; font-weight: 700; }
+.bar button:hover { background: var(--bar-fg); color: var(--bar-bg); }
+.bar button:focus-visible { outline-color: var(--bar-fg); }
+
+@media (max-width: 699px) {
+  .memo-dlg { width: 100%; max-height: 88%; margin: auto 0 0; }
+  .memo { border-width: 1px 0 0; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+  .bar-in { display: grid; grid-template-columns: minmax(0, 1fr) auto; padding-block: 8px; }
+  .bar-wine { grid-row: 1; grid-column: 1; }
+  .bar button { grid-row: 1; grid-column: 2; }
+  .bar-sums { grid-row: 2; grid-column: 1 / -1; justify-content: space-between; gap: 6px 12px; }
+  .bar-ml { font-size: 20px; }
+  .bar-sums dd { font-size: 14px; }
+  .bar-sums .grand dd { font-size: 16px; line-height: 1.4; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .step button, .chip, .btn { transition: background-color .12s, color .12s, border-color .12s; }
+  .pager.nudge .panel { animation: nudge .9s ease-in-out 2; }
+  @keyframes nudge { 0%, 100% { transform: none; } 50% { transform: translateX(-40px); } }
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="v-L" viewBox="0 0 40 64">
+      <path class="v-glass" d="M14 2h12v14l10 30q2 16-10 16H14Q2 62 4 46l10-30z"/>
+      <path class="v-liq" d="M11.6 27h16.8l6.4 19.3q1.6 14.5-8.8 14.5H14q-10.4 0-8.8-14.5z"/>
+    </symbol>
+    <symbol id="v-G" viewBox="0 0 28 48">
+      <path class="v-glass" d="M4 2h20q0 20-10 22Q4 22 4 2z"/>
+      <path class="v-liq" d="M5.6 10h16.8q-1.2 11.4-8.4 12.6Q6.8 21.4 5.6 10z"/>
+      <path class="v-line" d="M14 24v20M6 45h16"/>
+    </symbol>
+    <symbol id="v-M" viewBox="0 0 30 92">
+      <path class="v-glass" d="M11 2h8v22q9 6 9 17v44q0 5-5 5H7q-5 0-5-5V41q0-11 9-17z"/>
+      <path class="v-liq" d="M3.6 42h22.8v42.6q0 3.8-3.8 3.8H7.4q-3.8 0-3.8-3.8z"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <header class="top">
+    <h1>酒クズ屋</h1>
+    <div class="flag" aria-hidden="true"><i></i><i></i><i></i></div>
+    <p>サイゼリヤで食べたい料理を選ぶと、残りの予算でいちばん多く飲めるワインの頼み方を出します。各料理の下の数字は、それを頼むと減るワインの量です。</p>
+  </header>
+
+  <section class="setup" aria-label="設定">
+    <div class="setup-item">
+      <label class="field-label" for="budget">予算（税込）</label>
+      <span class="yen-input"><input id="budget" type="number" inputmode="numeric" min="0" max="50000" step="100" value="1000"><span>円</span></span>
+      <span class="seg" id="presets">
+        <button type="button" class="chip" data-yen="1000">1,000</button>
+        <button type="button" class="chip" data-yen="1500">1,500</button>
+        <button type="button" class="chip" data-yen="2000">2,000</button>
+        <button type="button" class="chip" data-yen="3000">3,000</button>
+      </span>
+    </div>
+    <div class="setup-item">
+      <span class="seg" role="group" aria-label="ワインの色">
+        <button type="button" class="chip" id="colRed" aria-pressed="true">赤</button>
+        <button type="button" class="chip" id="colWhite" aria-pressed="false">白</button>
+      </span>
+      <label class="check" for="magnum"><input type="checkbox" id="magnum">マグナム（1500ml・1,100円）も候補に入れる</label>
+    </div>
+  </section>
+
+  <main class="menu">
+    <div class="cats" id="cats" role="tablist" aria-label="メニューの種類"></div>
+    <div class="pager" id="pager"></div>
+  </main>
+
+  <footer class="note">
+    <p>サイゼリヤ非公式の計算ツールです。料理の価格と注文番号は2026年2月改定のグランドメニュー（税込）がもとで、同年6月の改定内容を反映しています。店舗や時期で変わることがあるので、最後は店のメニューで確かめてください。</p>
+    <p>22時以降は深夜料金（10%）が加算されるため、この計算より高くなります。お酒は20歳になってから。</p>
+  </footer>
+</div>
+
+<dialog class="memo-dlg" id="memoDlg" aria-labelledby="memoTitle">
+  <div class="memo">
+    <div class="memo-head">
+      <h2 id="memoTitle">注文メモ</h2>
+      <span>注文用紙に書く番号つき</span>
+      <button type="button" class="x" id="memoClose" aria-label="注文メモを閉じる">×</button>
+    </div>
+    <div class="table-top" id="vessels" aria-hidden="true"></div>
+    <div class="msg" id="msg" hidden></div>
+    <div class="memo-body" id="memoBody"></div>
+    <dl class="sums num" id="sums"></dl>
+    <div class="memo-actions">
+      <button type="button" class="btn primary" id="copyBtn">メモをコピー</button>
+      <button type="button" class="btn" id="resetBtn">料理を全部やめる</button>
+      <span class="copied" id="copied" hidden>コピーしました</span>
+    </div>
+    <textarea id="copyBox" readonly hidden aria-label="注文メモのテキスト"></textarea>
+  </div>
+</dialog>
+
+<div class="hint" id="hint" role="status">
+  <span class="arrows" aria-hidden="true">←→</span>
+  <span>左右にスワイプするか、上のタブで種類を切り替えられます</span>
+  <button type="button" id="hintClose" aria-label="ヒントを閉じる">×</button>
+</div>
+
+<div class="bar" id="bar" role="region" aria-label="合計">
+  <div class="bar-in">
+    <div class="bar-wine">
+      <span class="bar-ml num" id="barMl"></span>
+      <span class="bar-plan num" id="barPlan"></span>
+    </div>
+    <dl class="bar-sums num">
+      <div><dt>料理</dt><dd id="barFood"></dd></div>
+      <div><dt>ワイン</dt><dd id="barWine"></dd></div>
+      <div class="grand"><dt>合計</dt><dd id="barTotal"></dd></div>
+      <div id="barRestBox"><dt id="barRestLabel">おつり</dt><dd id="barRest"></dd></div>
+    </dl>
+    <button type="button" id="barBtn">注文メモ</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var WINES = [
+    { id: 'M', name: 'マグナム', ml: 1500, price: 1100, code: { red: 3407, white: 3408 }, sym: 'v-M', w: 30, h: 92, optional: true },
+    { id: 'L', name: 'デカンタ大', ml: 500, price: 400, code: { red: 3405, white: 3406 }, sym: 'v-L', w: 44, h: 70 },
+    { id: 'S', name: 'デカンタ小', ml: 250, price: 200, code: { red: 3403, white: 3404 }, sym: 'v-L', w: 35, h: 56 },
+    { id: 'G', name: 'グラスワイン', ml: 120, price: 100, code: { red: 3401, white: 3402 }, sym: 'v-G', w: 26, h: 44 }
+  ];
+
+  // [注文番号, 品名, 税込価格, タグ]
+  var MENU = [
+    { cat: 'おつまみ', items: [
+      [1423, '生ハムとバッファローモッツァレラの盛合せ', 500],
+      [1422, '生ハム', 320],
+      [1417, 'バッファローモッツァレラのカプレーゼ', 430],
+      [1408, '蒸し鶏の香味ソース', 280],
+      [1406, '小エビのカクテル', 280]
+    ]},
+    { cat: '前菜', items: [
+      [1401, '辛味チキン', 300],
+      [1405, 'エスカルゴのオーブン焼き', 400],
+      [1410, 'ムール貝のガーリック焼き', 400],
+      [1407, 'チョリソー', 400],
+      [1404, 'ポップコーンシュリンプ', 300],
+      [1402, 'アロスティチーニ', 400],
+      [1452, 'アロスティチーニ Wサイズ', 800],
+      [1403, 'ほうれん草のソテー', 200],
+      [1416, 'ポテトのグリル', 300],
+      [1425, '柔らか青豆の温サラダ', 200],
+      [1413, 'キャロットラペ', 200]
+    ]},
+    { cat: 'サラダ', items: [
+      [1202, '小エビのサラダ', 350],
+      [1209, 'チキンのサラダ', 350],
+      [1205, 'わかめのサラダ', 350]
+    ]},
+    { cat: 'スープ', items: [
+      [1307, 'たまねぎのズッパ', 300],
+      [1301, 'コーンクリームスープ', 150],
+      [1305, '田舎風ミネストローネ', 300],
+      [1302, '冷たいパンプキンスープ', 180, '季節限定']
+    ]},
+    { cat: 'パン', items: [
+      [3110, 'フォッカチオ', 150],
+      [3111, 'ガーリックフォッカチオ', 200],
+      [3113, 'タラコフォッカチオ', 250],
+      [3114, 'チーズフォッカチオ', 250],
+      [3112, 'シナモンフォッカチオ', 200]
+    ]},
+    { cat: 'ピザ', items: [
+      [2203, 'バッファローモッツァレラのマルゲリータピザ', 400],
+      [2208, 'ソーセージピザ', 400],
+      [2206, 'たっぷりコーンのピザ', 400],
+      [2204, '野菜ときのこのピザ', 400]
+    ]},
+    { cat: 'ドリア・グラタン', items: [
+      [2101, 'ミラノ風ドリア', 300],
+      [2103, '半熟卵のミラノ風ドリア', 350],
+      [2108, '焼チーズ ミラノ風ドリア', 350],
+      [2110, 'タラコとポップコーンシュリンプのドリア', 400],
+      [2115, 'ポップコーンシュリンプとタラコのクリームグラタン', 430]
+    ]},
+    { cat: 'パスタ', items: [
+      [2301, 'タラコソース シシリー風', 400],
+      [2305, 'カルボナーラ', 500],
+      [2318, '半熟卵のカルボナーラ', 550],
+      [2320, '小エビのタラコソース', 540],
+      [2304, 'パルマ風スパゲッティ', 400],
+      [2321, 'きのことほうれん草のクリームスパゲッティ', 600],
+      [2328, 'イカの墨入りセピアソース', 500],
+      [2306, 'ミートソース ボロニア風', 400],
+      [2316, '半熟卵のミートソース ボロニア風', 450],
+      [2310, 'スープ入り塩味ボンゴレ', 500],
+      [2303, 'ペペロンチーノ', 300],
+      [2317, '半熟卵のペペロンチーノ', 350],
+      [2325, 'ペンネアラビアータ', 430]
+    ]},
+    { cat: 'ハンバーグ', items: [
+      [2418, 'ミックスグリル', 650],
+      [2406, 'ハンバーグステーキ', 400],
+      [2403, 'イタリアンハンバーグ', 500],
+      [2407, 'ディアボラ風ハンバーグ', 500]
+    ]},
+    { cat: 'チキン・ステーキ', note: 'チキン2品は2026年6月から差し込みメニューでの販売です。ステーキは店舗によってビーフかラムのどちらかになります。', items: [
+      [2402, '若鶏のディアボラ風', 500, '差し込みメニュー'],
+      [2404, '柔らかチキンのチーズ焼き', 500, '差し込みメニュー'],
+      [2419, 'ビーフステーキ', 1090, '店舗による'],
+      [2417, 'ラムのランプステーキ', 1090, '店舗による']
+    ]},
+    { cat: 'ライス・トッピング', items: [
+      [3103, 'スモールライス', 100],
+      [3101, 'ライス', 150],
+      [3102, 'ラージライス', 200],
+      [4301, 'トッピング半熟卵', 50],
+      [4307, 'トッピング粉チーズ', 100],
+      [4304, 'トッピング野菜ソース', 100]
+    ]},
+    { cat: 'デザート', note: '食後に出してほしいときは、番号の2桁目を9にして書きます（例：3206 → 3906）。', items: [
+      [3206, 'イタリアンプリン', 250],
+      [3201, 'ティラミス クラシコ', 300],
+      [3212, 'プリンとティラミス クラシコの盛合せ', 500],
+      [3205, 'ミルクジェラート', 250],
+      [3207, 'チョコレートケーキ', 300],
+      [3216, 'チョコレートケーキ＆ミルクジェラート', 500],
+      [3213, 'トリフアイスクリーム', 350],
+      [3215, 'コーヒーゼリー＆ミルクジェラート', 350],
+      [3214, 'ジェラート＆シナモンフォッカチオ', 450]
+    ]}
+  ];
+
+  var KEY = 'sakekuzuya-v1';
+  var MAX_BUDGET = 50000;
+  var state = { budget: 1000, color: 'red', magnum: false, qty: {}, custom: [] };
+
+  try {
+    var saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (saved && typeof saved === 'object') {
+      if (Number.isFinite(saved.budget)) state.budget = clampBudget(saved.budget);
+      if (saved.color === 'white') state.color = 'white';
+      state.magnum = !!saved.magnum;
+      if (saved.qty && typeof saved.qty === 'object') state.qty = saved.qty;
+      if (Array.isArray(saved.custom)) {
+        state.custom = saved.custom.filter(function (c) {
+          return c && typeof c.name === 'string' && Number.isFinite(c.price) && c.price > 0 && typeof c.id === 'string';
+        });
+      }
+    }
+  } catch (e) { /* 保存なしで動く */ }
+
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+  function clampBudget(v) { return Math.max(0, Math.min(MAX_BUDGET, Math.floor(v))); }
+  function yen(n) { return n.toLocaleString('ja-JP') + '円'; }
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function gcd(a, b) { while (b) { var t = a % b; a = b; b = t; } return a; }
+  var reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // 予算内でワイン量を最大にする（同量なら安いほう、さらに同額なら器が少ないほう）
+  function solve(budget, wines) {
+    var g = wines.reduce(function (a, w) { return gcd(a, w.price); }, 0);
+    var n = Math.max(0, Math.floor(budget / g));
+    var vol = new Int32Array(n + 1), cost = new Int32Array(n + 1), cnt = new Int32Array(n + 1);
+    var pick = new Int16Array(n + 1).fill(-1);
+    for (var k = 1; k <= n; k++) {
+      vol[k] = vol[k - 1]; cost[k] = cost[k - 1]; cnt[k] = cnt[k - 1];
+      for (var i = 0; i < wines.length; i++) {
+        var u = wines[i].price / g;
+        if (u > k) continue;
+        var v = vol[k - u] + wines[i].ml, c = cost[k - u] + wines[i].price, m = cnt[k - u] + 1;
+        if (v > vol[k] || (v === vol[k] && (c < cost[k] || (c === cost[k] && m < cnt[k])))) {
+          vol[k] = v; cost[k] = c; cnt[k] = m; pick[k] = i;
+        }
+      }
+    }
+    function idx(y) { return Math.min(n, Math.floor(y / g)); }
+    return {
+      vol: function (y) { return y < 0 ? 0 : vol[idx(y)]; },
+      plan: function (y) {
+        var counts = wines.map(function () { return 0; });
+        var k = y < 0 ? 0 : idx(y);
+        while (k > 0) {
+          var i = pick[k];
+          if (i < 0) { k--; continue; }
+          counts[i]++; k -= wines[i].price / g;
+        }
+        var list = [];
+        wines.forEach(function (w, i) { if (counts[i]) list.push({ wine: w, n: counts[i] }); });
+        return { list: list, ml: y < 0 ? 0 : vol[idx(y)], cost: y < 0 ? 0 : cost[idx(y)] };
+      }
+    };
+  }
+
+  // ---- タブとページ送り ----
+  var cats = $('cats'), pager = $('pager');
+  var tabs = [], panels = [], badges = [];
+  var active = 0, settled = 0, settleTimer = 0, raf = 0;
+
+  function addTab(label, cls) {
+    var i = tabs.length;
+    var tab = el('button', 'chip' + (cls ? ' ' + cls : '')); tab.type = 'button';
+    tab.id = 'tab' + i; tab.setAttribute('role', 'tab'); tab.setAttribute('aria-controls', 'panel' + i);
+    tab.appendChild(el('span', null, label));
+    var badge = el('span', 'n num'); badge.hidden = true; tab.appendChild(badge);
+    tab.addEventListener('click', function () { goTo(i, true); hideHint(); });
+    cats.appendChild(tab);
+    var panel = el('section', 'panel'); panel.id = 'panel' + i;
+    panel.setAttribute('role', 'tabpanel'); panel.setAttribute('aria-labelledby', 'tab' + i);
+    pager.appendChild(panel);
+    tabs.push(tab); panels.push(panel); badges.push(badge);
+    return i;
+  }
+  function markActive(i) {
+    active = i;
+    tabs.forEach(function (t, k) {
+      t.setAttribute('aria-selected', String(k === i));
+      t.tabIndex = k === i ? 0 : -1;
+    });
+    var t = tabs[i];
+    cats.scrollTo({ left: t.offsetLeft - (cats.clientWidth - t.offsetWidth) / 2, behavior: reduceMotion ? 'auto' : 'smooth' });
+  }
+  function goTo(i, smooth) {
+    i = Math.max(0, Math.min(tabs.length - 1, i));
+    pager.scrollTo({ left: i * pager.clientWidth, behavior: smooth && !reduceMotion ? 'smooth' : 'auto' });
+  }
+  // 見えているページの高さに合わせる（低いページの下に空白を残さない）
+  function fitHeight() {
+    var w = pager.clientWidth || 1, pos = pager.scrollLeft / w;
+    var a = Math.max(0, Math.min(panels.length - 1, Math.floor(pos + 0.001)));
+    var b = Math.max(0, Math.min(panels.length - 1, Math.ceil(pos - 0.001)));
+    pager.style.height = Math.max(panels[a].offsetHeight, panels[b].offsetHeight) + 'px';
+  }
+  function onSettle() {
+    fitHeight();
+    panels.forEach(function (p, k) { p.inert = k !== active; });
+    if (active !== settled) {
+      settled = active;
+      hideHint();
+      // 長い一覧の途中で切り替えたら、新しいページの先頭をタブのすぐ下に出す
+      var tabsBottom = cats.getBoundingClientRect().bottom, top = pager.getBoundingClientRect().top;
+      if (top < tabsBottom - 1) window.scrollBy(0, top - tabsBottom);
+    }
+  }
+  pager.addEventListener('scroll', function () {
+    if (!raf) raf = requestAnimationFrame(function () {
+      raf = 0;
+      var i = Math.round(pager.scrollLeft / (pager.clientWidth || 1));
+      i = Math.max(0, Math.min(tabs.length - 1, i));
+      if (i !== active) markActive(i);
+      fitHeight();
+    });
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(onSettle, 140);
+  }, { passive: true });
+  cats.addEventListener('keydown', function (e) {
+    var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    var i = Math.max(0, Math.min(tabs.length - 1, active + d));
+    goTo(i, true); tabs[i].focus({ preventScroll: true }); hideHint();
+  });
+
+  // ---- お品書きを組み立てる ----
+  var rows = {};      // id -> {root, qty, minus, plus, cost}
+  var items = {};     // id -> {id, code, name, price}
+  var tabOf = {};     // id -> タブ番号
+  var order = [];     // 表示順の id
+
+  function makeRow(it, removable) {
+    var root = el('div', 'row');
+    var left = el('div');
+    left.appendChild(el('div', 'nm', it.name));
+    var sub = el('div', 'sub');
+    if (it.code) sub.appendChild(el('span', 'code', String(it.code)));
+    var cost = el('span', 'cost');
+    sub.appendChild(cost);
+    if (it.tag) sub.appendChild(el('span', 'tag', it.tag));
+    if (removable) {
+      var rm = el('button', 'link', '消す');
+      rm.type = 'button';
+      rm.setAttribute('aria-label', it.name + 'を一覧から消す');
+      rm.addEventListener('click', function () {
+        state.custom = state.custom.filter(function (c) { return c.id !== it.id; });
+        delete state.qty[it.id];
+        buildCustom(); update();
+      });
+      sub.appendChild(rm);
+    }
+    left.appendChild(sub);
+    root.appendChild(left);
+    root.appendChild(el('div', 'price', yen(it.price)));
+    var step = el('div', 'step');
+    var minus = el('button', null, '−'); minus.type = 'button';
+    minus.setAttribute('aria-label', it.name + 'を1つ減らす');
+    var qty = el('span', 'qty', '0');
+    var plus = el('button', null, '+'); plus.type = 'button';
+    plus.setAttribute('aria-label', it.name + 'を1つ足す');
+    minus.addEventListener('click', function () { change(it.id, -1); });
+    plus.addEventListener('click', function () { change(it.id, 1); });
+    step.appendChild(minus); step.appendChild(qty); step.appendChild(plus);
+    root.appendChild(step);
+    rows[it.id] = { root: root, qty: qty, minus: minus, plus: plus, cost: cost };
+    return root;
+  }
+
+  MENU.forEach(function (c) {
+    var ti = addTab(c.cat), panel = panels[ti];
+    if (c.note) panel.appendChild(el('p', 'cat-note', c.note));
+    var list = el('div', 'rows');
+    c.items.forEach(function (a) {
+      var it = { id: String(a[0]), code: a[0], name: a[1], price: a[2], tag: a[3] };
+      items[it.id] = it; order.push(it.id); tabOf[it.id] = ti;
+      list.appendChild(makeRow(it, false));
+    });
+    panel.appendChild(list);
+  });
+
+  // その他（メニューにない品を自分で足す）
+  var otherTab = addTab('その他');
+  (function () {
+    var box = el('div', 'add');
+    box.appendChild(el('h2', null, 'メニューにない品を足す'));
+    var form = el('form'); form.id = 'addForm'; form.noValidate = true;
+    var l1 = el('label', null, '品名'); l1.htmlFor = 'addName';
+    var name = el('input'); name.id = 'addName'; name.type = 'text'; name.maxLength = 30; name.autocomplete = 'off'; name.placeholder = '季節メニューなど';
+    l1.appendChild(name);
+    var l2 = el('label', null, '税込価格（円）'); l2.htmlFor = 'addPrice';
+    var price = el('input'); price.id = 'addPrice'; price.type = 'number'; price.inputMode = 'numeric'; price.min = '1'; price.max = String(MAX_BUDGET); price.step = '1'; price.placeholder = '300';
+    l2.appendChild(price);
+    var sub = el('button', 'btn', '足す'); sub.type = 'submit';
+    var err = el('p', 'err'); err.id = 'addErr'; err.hidden = true;
+    form.appendChild(l1); form.appendChild(l2); form.appendChild(sub); form.appendChild(err);
+    box.appendChild(form);
+    var empty = el('p', 'empty', '足した品はここに並びます。'); empty.id = 'addEmpty';
+    box.appendChild(empty);
+    panels[otherTab].appendChild(box);
+  })();
+  var customList = el('div', 'rows'); panels[otherTab].appendChild(customList);
+  var customIds = [];
+  function buildCustom() {
+    customIds.forEach(function (id) { delete rows[id]; delete items[id]; delete tabOf[id]; });
+    customIds = [];
+    customList.textContent = '';
+    state.custom.forEach(function (c) {
+      var it = { id: c.id, code: null, name: c.name, price: c.price };
+      items[it.id] = it; customIds.push(it.id); tabOf[it.id] = otherTab;
+      customList.appendChild(makeRow(it, true));
+    });
+    $('addEmpty').hidden = state.custom.length > 0;
+  }
+  buildCustom();
+
+  // 保存されていた数量のうち、今のメニューにないものは捨てる
+  Object.keys(state.qty).forEach(function (id) {
+    var n = state.qty[id];
+    if (!items[id] || !Number.isInteger(n) || n <= 0) delete state.qty[id];
+  });
+
+  function change(id, d) {
+    var n = (state.qty[id] || 0) + d;
+    if (n <= 0) delete state.qty[id]; else state.qty[id] = Math.min(n, 99);
+    update();
+  }
+
+  // ---- 計算して画面に出す ----
+  var lastMemo = '';
+  function update() {
+    var wines = WINES.filter(function (w) { return !w.optional || state.magnum; });
+    var ids = order.concat(customIds);
+    var food = 0;
+    ids.forEach(function (id) { food += (state.qty[id] || 0) * items[id].price; });
+    var rest = state.budget - food;
+    var over = rest < 0;
+    var t = solve(Math.max(rest, 0), wines);
+    var plan = t.plan(rest);
+    var change_ = over ? 0 : rest - plan.cost;
+
+    // 行とタブの数
+    var perTab = tabs.map(function () { return 0; });
+    ids.forEach(function (id) {
+      var r = rows[id], it = items[id], n = state.qty[id] || 0;
+      var afford = it.price <= rest;
+      perTab[tabOf[id]] += n;
+      r.qty.textContent = n;
+      r.minus.disabled = n === 0;
+      r.plus.disabled = !afford || n >= 99;
+      r.root.classList.toggle('on', n > 0);
+      r.root.classList.toggle('out', !afford && n === 0);
+      if (!afford) {
+        r.cost.textContent = '予算が足りません'; r.cost.className = 'cost no';
+      } else {
+        var d = plan.ml - t.vol(rest - it.price);
+        if (d === 0) { r.cost.textContent = 'ワインは減りません'; r.cost.className = 'cost free'; }
+        else { r.cost.textContent = 'ワイン −' + d + 'ml'; r.cost.className = 'cost'; }
+      }
+    });
+    badges.forEach(function (b, i) {
+      b.hidden = perTab[i] === 0; b.textContent = perTab[i];
+      tabs[i].setAttribute('aria-label', tabs[i].firstChild.textContent + (perTab[i] ? '（' + perTab[i] + '品選択中）' : ''));
+    });
+
+    // 設定
+    var b = $('budget');
+    if (document.activeElement !== b) b.value = state.budget;
+    Array.prototype.forEach.call($('presets').children, function (c) {
+      c.setAttribute('aria-pressed', String(Number(c.dataset.yen) === state.budget));
+    });
+    $('colRed').setAttribute('aria-pressed', String(state.color === 'red'));
+    $('colWhite').setAttribute('aria-pressed', String(state.color === 'white'));
+    $('magnum').checked = state.magnum;
+
+    // 器
+    var vs = $('vessels'); vs.textContent = ''; vs.dataset.color = state.color;
+    var drawn = 0, total = 0, CAP = 18;
+    plan.list.forEach(function (p) {
+      for (var i = 0; i < p.n; i++) {
+        total++;
+        if (drawn >= CAP) continue;
+        var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', p.wine.w); svg.setAttribute('height', p.wine.h);
+        var use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+        use.setAttribute('href', '#' + p.wine.sym);
+        svg.appendChild(use); vs.appendChild(svg); drawn++;
+      }
+    });
+    if (total > drawn) vs.appendChild(el('span', 'more', 'ほか' + (total - drawn) + '個'));
+    if (total === 0) vs.appendChild(el('span', 'none', 'テーブルにワインはありません'));
+
+    var colorName = state.color === 'red' ? '赤' : '白';
+    var msg = $('msg'); msg.hidden = true; msg.className = 'msg';
+    if (over) {
+      msg.textContent = '料理だけで予算を' + yen(-rest) + '超えています。品を減らすか、予算を上げてください。';
+      msg.classList.add('warn'); msg.hidden = false;
+    } else if (change_ > 0) {
+      var fits = ids.filter(function (id) { return items[id].price <= change_; })
+        .sort(function (a, c) { return items[c].price - items[a].price; }).slice(0, 2)
+        .map(function (id) { return items[id].name + '（' + yen(items[id].price) + '）'; });
+      msg.textContent = 'おつりが' + yen(change_) + '出ます。' +
+        (fits.length ? fits.join('か') + 'なら、ワインを減らさずに足せます。' : 'ワイン1杯には届かない額です。');
+      msg.classList.add('ok'); msg.hidden = false;
+    }
+
+    // 注文メモ
+    var body = $('memoBody'); body.textContent = '';
+    var lines = ['酒クズ屋 注文メモ（予算' + yen(state.budget) + '）'];
+    function group(title, entries) {
+      body.appendChild(el('div', 'grp', title));
+      var ul = el('ul');
+      entries.forEach(function (e) {
+        var li = el('li', 'num');
+        li.appendChild(el('span', 'code', e.code || '—'));
+        li.appendChild(el('span', null, e.name));
+        li.appendChild(el('span', 'q', '×' + e.n));
+        li.appendChild(el('span', null, yen(e.price * e.n)));
+        ul.appendChild(li);
+        lines.push((e.code ? e.code + ' ' : '') + e.name + ' ×' + e.n + '  ' + yen(e.price * e.n));
+      });
+      body.appendChild(ul);
+    }
+    var foodEntries = ids.filter(function (id) { return state.qty[id] > 0; }).map(function (id) {
+      return { code: items[id].code ? String(items[id].code) : '', name: items[id].name, n: state.qty[id], price: items[id].price };
+    });
+    if (foodEntries.length) group('料理', foodEntries);
+    else body.appendChild(el('div', 'empty', '料理は選んでいません。予算をぜんぶワインに回しています。'));
+    var wineEntries = plan.list.map(function (p) {
+      return { code: String(p.wine.code[state.color]), name: colorName + ' ' + p.wine.name + '（' + p.wine.ml + 'ml）', n: p.n, price: p.wine.price };
+    });
+    if (wineEntries.length) group('ワイン', wineEntries);
+
+    var sums = $('sums'); sums.textContent = '';
+    function sum(label, value, cls) {
+      var d = el('div', cls); d.appendChild(el('dt', null, label)); d.appendChild(el('dd', null, value)); sums.appendChild(d);
+    }
+    sum('料理', yen(food));
+    sum('ワイン ' + plan.ml.toLocaleString('ja-JP') + 'ml', yen(plan.cost));
+    sum('合計', yen(food + plan.cost), 'grand');
+    sum(over ? '不足' : 'おつり', yen(over ? -rest : change_));
+    lines.push('合計 ' + yen(food + plan.cost) + ' / ワイン ' + plan.ml.toLocaleString('ja-JP') + 'ml');
+    lastMemo = lines.join('\n');
+    $('copied').hidden = true; $('copyBox').hidden = true;
+    $('resetBtn').disabled = foodEntries.length === 0;
+
+    // 画面下の合計
+    $('barMl').textContent = 'ワイン ' + plan.ml.toLocaleString('ja-JP') + 'ml';
+    $('barPlan').textContent = plan.list.map(function (p) { return p.wine.name.replace('デカンタ', '').replace('ワイン', '') + '×' + p.n; }).join(' ') || 'ワインなし';
+    $('barFood').textContent = yen(food);
+    $('barWine').textContent = yen(plan.cost);
+    $('barTotal').textContent = yen(food + plan.cost);
+    $('barRestLabel').textContent = over ? '不足' : 'おつり';
+    $('barRest').textContent = yen(over ? -rest : change_);
+    $('barRestBox').className = over ? 'short' : '';
+
+    fitHeight();
+    save();
+  }
+
+  // ---- 操作 ----
+  $('budget').addEventListener('input', function (e) {
+    var v = Number(e.target.value);
+    state.budget = Number.isFinite(v) ? clampBudget(v) : 0;
+    update();
+  });
+  $('budget').addEventListener('blur', function (e) { e.target.value = state.budget; });
+  $('presets').addEventListener('click', function (e) {
+    var y = e.target && e.target.dataset && e.target.dataset.yen;
+    if (y) { state.budget = Number(y); update(); }
+  });
+  $('colRed').addEventListener('click', function () { state.color = 'red'; update(); });
+  $('colWhite').addEventListener('click', function () { state.color = 'white'; update(); });
+  $('magnum').addEventListener('change', function (e) { state.magnum = e.target.checked; update(); });
+  $('resetBtn').addEventListener('click', function () { state.qty = {}; update(); });
+  // 注文メモのダイアログ（開いてもタブとスクロール位置はそのまま）
+  var dlg = $('memoDlg');
+  $('barBtn').addEventListener('click', function () {
+    if (dlg.open) return;
+    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+  });
+  function closeMemo() { if (dlg.close) dlg.close(); else dlg.removeAttribute('open'); }
+  $('memoClose').addEventListener('click', closeMemo);
+  dlg.addEventListener('click', function (e) { if (e.target === dlg) closeMemo(); });
+
+  $('copyBtn').addEventListener('click', function () {
+    function fallback() {
+      var box = $('copyBox'); box.value = lastMemo; box.hidden = false; box.focus(); box.select();
+    }
+    try {
+      navigator.clipboard.writeText(lastMemo).then(function () { $('copied').hidden = false; }, fallback);
+    } catch (e) { fallback(); }
+  });
+
+  $('addForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var name = $('addName').value.trim(), price = Number($('addPrice').value), err = $('addErr');
+    if (!name) { err.textContent = '品名を入れてください。'; err.hidden = false; fitHeight(); $('addName').focus(); return; }
+    if (!Number.isInteger(price) || price < 1 || price > MAX_BUDGET) {
+      err.textContent = '価格は1〜50,000円の整数で入れてください。'; err.hidden = false; fitHeight(); $('addPrice').focus(); return;
+    }
+    err.hidden = true;
+    var spent = order.concat(customIds).reduce(function (s, i) { return s + (state.qty[i] || 0) * items[i].price; }, 0);
+    var id = 'c' + Date.now().toString(36);
+    state.custom.push({ id: id, name: name, price: price });
+    buildCustom();
+    if (price <= state.budget - spent) state.qty[id] = 1;
+    $('addName').value = ''; $('addPrice').value = '';
+    update();
+  });
+
+  // ---- スワイプのヒント ----
+  var hintTimer = 0;
+  function hideHint() { $('hint').hidden = true; pager.classList.remove('nudge'); clearTimeout(hintTimer); }
+  $('hintClose').addEventListener('click', hideHint);
+  hintTimer = setTimeout(hideHint, 9000);
+  setTimeout(function () { if (!$('hint').hidden) pager.classList.add('nudge'); }, 700);
+
+  // 固定バーの高さぶん、ページ下を空ける
+  function fitBar() { document.documentElement.style.setProperty('--bar-h', $('bar').offsetHeight + 'px'); }
+  if (window.ResizeObserver) {
+    new ResizeObserver(fitBar).observe($('bar'));
+    var ro = new ResizeObserver(fitHeight);
+    panels.forEach(function (p) { ro.observe(p); });
+  }
+  window.addEventListener('resize', function () {
+    fitBar();
+    pager.scrollTo({ left: active * pager.clientWidth, behavior: 'auto' });
+    fitHeight();
+  });
+
+  markActive(0);
+  update();
+  fitBar();
+  onSettle();
+})();
+</script>
+
+</body></html>
